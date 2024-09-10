@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leaflet Map Example</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <style>
+    #map { 
+      height: 500px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>Get User's Live Location and Send SMS</h1>
+  <button onclick="getLocation()">Get Location</button>
+  <p id="location"></p>
+
+  <div id="map"></div>
+
+  <script>
+    // Initialize the map and set its view to a default location and zoom level
+    var map = L.map('map').setView([37.7749, -122.4194], 12);  // Default San Francisco coordinates
+
+    // Load and display the OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    function getLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(showPosition, showError);
+      } else {
+        document.getElementById("location").innerHTML = "Geolocation is not supported by this browser.";
+      }
+    }
+
+    function showPosition(position) {
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+
+      document.getElementById("location").innerHTML = `Latitude: ${latitude}, Longitude: ${longitude}`;
+
+      // Send the location data to the Flask backend via fetch
+      fetch('/send_sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          latitude: latitude,
+          longitude: longitude,
+        }),
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            console.log('SMS sent successfully.');
+            
+            // After SMS is sent, add marker to map
+            L.marker([latitude, longitude])
+              .addTo(map)
+              .bindPopup(`You are here: Lat ${latitude}, Long ${longitude}`)
+              .openPopup();
+
+            // Center the map on the user's location
+            map.setView([latitude, longitude], 15);
+          } else {
+            console.log('Failed to send SMS:', data.message);
+          }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function showError(error) {
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          alert("User denied the request for Geolocation.");
+          break;
+        case error.POSITION_UNAVAILABLE:
+          alert("Location information is unavailable.");
+          break;
+        case error.TIMEOUT:
+          alert("The request to get user location timed out.");
+          break;
+        case error.UNKNOWN_ERROR:
+          alert("An unknown error occurred.");
+          break;
+      }
+    }
+  </script>
+</body>
+</html>
